@@ -1,8 +1,8 @@
-# PayChain
+# Paya
 
 > **"Stripe for crypto payments — powered by Stellar."**
 
-PayChain is an open-source, global crypto payment infrastructure that lets businesses and developers accept payments in multiple cryptocurrencies, automatically convert them to stablecoins, settle instantly on the Stellar network, and withdraw to bank accounts.
+Paya is an open-source, global crypto payment infrastructure that lets businesses and developers accept payments in multiple cryptocurrencies, automatically convert them to stablecoins, settle instantly on the Stellar network, and withdraw to bank accounts.
 
 ---
 
@@ -24,7 +24,7 @@ PayChain is an open-source, global crypto payment infrastructure that lets busin
 
 ## Overview
 
-### What PayChain Does
+### What Paya Does
 
 | Feature | Description |
 |---|---|
@@ -78,7 +78,7 @@ Soroban Smart Contracts
 ## Repository Structure
 
 ```
-paychain/
+Paya/
 │
 ├── contracts/                        # Soroban smart contracts (Rust)
 │   ├── escrow_contract/
@@ -288,7 +288,7 @@ SUBSCRIPTION_CONTRACT_ID=
 FEE_MANAGER_CONTRACT_ID=
 
 # Database
-DATABASE_URL=postgresql://localhost:5432/paychain
+DATABASE_URL=postgresql://localhost:5432/Paya
 
 # Auth
 JWT_SECRET=
@@ -384,4 +384,4 @@ Key areas where you can help:
 
 ## License
 
-MIT © PayChain Contributors
+MIT © Paya Contributors

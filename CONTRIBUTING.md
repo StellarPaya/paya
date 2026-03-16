@@ -1,14 +1,14 @@
-# Contributing to PayChain
+# Contributing to Paya
 
 First off — thank you for taking the time to contribute. 🎉
 
-PayChain is community-built. Every merged pull request, reported bug, and piece of documentation makes a real difference. This guide will help you understand how to contribute effectively, regardless of your skill level.
+Paya is community-built. Every merged pull request, reported bug, and piece of documentation makes a real difference. This guide will help you understand how to contribute effectively, regardless of your skill level.
 
 ---
 
 ## Table of Contents
 
-- [Contributing to PayChain](#contributing-to-paychain)
+- [Contributing to Paya](#contributing-to-paya)
   - [Table of Contents](#table-of-contents)
   - [Code of Conduct](#code-of-conduct)
   - [How to Contribute](#how-to-contribute)
@@ -69,7 +69,7 @@ Violations may result in a warning or removal from the project.
 
 ## How to Contribute
 
-There are many ways to contribute to PayChain:
+There are many ways to contribute to Paya:
 
 | Type | What This Means |
 |---|---|
@@ -85,7 +85,7 @@ There are many ways to contribute to PayChain:
 ## Project Structure
 
 ```
-paychain/
+Paya/
 ├── contracts/          ← Soroban smart contracts (Rust)
 ├── backend/            ← NestJS backend services (TypeScript)
 ├── frontend/           ← Next.js app (TypeScript)
@@ -127,11 +127,11 @@ cargo install --locked soroban-cli
 
 ```bash
 # Fork the repo first, then:
-git clone https://github.com/<your-username>/paychain.git
-cd paychain
+git clone https://github.com/<your-username>/Paya.git
+cd Paya
 
 # Add upstream remote
-git remote add upstream https://github.com/your-org/paychain.git
+git remote add upstream https://github.com/your-org/Paya.git
 
 # Install frontend dependencies
 cd frontend && pnpm install && cd ..
@@ -160,7 +160,7 @@ cd frontend && pnpm dev
 
 ## Picking an Issue
 
-1. Browse [open issues](https://github.com/your-org/paychain/issues)
+1. Browse [open issues](https://github.com/your-org/Paya/issues)
 2. Look for issues labeled `good first issue` if you are new
 3. Leave a comment: **"I'd like to work on this"**
 4. A maintainer will assign it to you
@@ -466,4 +466,4 @@ All contributors are recognized in:
 - The `CONTRIBUTORS.md` file (added automatically on first merged PR)
 - Release notes for the version their work ships in
 
-Thank you for building PayChain. 🚀
+Thank you for building Paya. 🚀
