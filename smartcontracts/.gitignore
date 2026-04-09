@@ -1,4 +1,4 @@
-# Rust's output directory
+# Rust's output directory to ignore
 target
 
 # Local Soroban settings
