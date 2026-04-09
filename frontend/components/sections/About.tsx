@@ -5,7 +5,7 @@ export function About() {
     <Section
       id="about"
       eyebrow="About"
-      title="Global crypto payments that feel like a modern API"
+      title="Global crypto payments that feel like a modern day payment"
       description="Paya is an open-source payment infrastructure for businesses and developers. Collect payments in multiple cryptocurrencies, settle as USDC on Stellar via Soroban smart contracts, and plug into dashboards, webhooks, and SDKs."
     >
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-3">
