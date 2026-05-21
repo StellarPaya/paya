@@ -6,6 +6,7 @@ pub enum DataKey {
     Version,
     Admin,
     ExchangeRate(Symbol), // Lưu trữ tỷ giá theo cặp tiền
+    Payment(String),
 }
 
 #[contracttype]
