@@ -1,4 +1,4 @@
-use soroban_sdk::contracttype;
+use soroban_sdk::{contracttype, contracterror};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -7,6 +7,12 @@ pub enum DataKey {
     Admin,
     ExchangeRate(Symbol), // Lưu trữ tỷ giá theo cặp tiền
     Payment(String),
+}
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Error {
+    PaymentAlreadyExists = 1,
 }
 
 #[contracttype]
