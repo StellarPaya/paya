@@ -1,4 +1,4 @@
-use soroban_sdk::{Env, String};
+use soroban_sdk::{Env, String, Address};
 
 use crate::types::{DataKey, PaymentRecord, PaymentStatus};
 
@@ -27,10 +27,13 @@ pub fn get_payment(env: &Env, payment_id: String) -> Option<PaymentRecord> {
         .get::<DataKey, PaymentRecord>(&DataKey::Payment(payment_id))
 }
 
-pub fn update_payment_status(env: &Env, payment_id: String, status: PaymentStatus) {
+pub fn update_payment_status(env: &Env, payment_id: String, status: PaymentStatus) -> Result<(), crate::types::Error> {
     if let Some(mut record) = get_payment(env, payment_id.clone()) {
         record.status = status;
         save_payment(env, payment_id, record);
+        Ok(())
+    } else {
+        Err(crate::types::Error::PaymentNotFound)
     }
 }
 
@@ -38,4 +41,16 @@ pub fn payment_exists(env: &Env, payment_id: String) -> bool {
     env.storage()
         .instance()
         .has(&DataKey::Payment(payment_id))
+}
+
+pub fn set_admin(env: &Env, admin: Address) {
+    env.storage()
+        .instance()
+        .set::<DataKey, Address>(&DataKey::Admin, &admin);
+}
+
+pub fn get_admin(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Admin)
 }
