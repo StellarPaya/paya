@@ -13,6 +13,8 @@ pub enum DataKey {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Error {
     PaymentAlreadyExists = 1,
+    Unauthorized = 2,
+    PaymentNotFound = 3,
 }
 
 #[contracttype]
