@@ -10,6 +10,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { NotificationServiceModule } from './notification-service/notification-service.module';
 import { AuthModule } from './auth/auth.module';
+import { ConversionEngineModule } from './conversion-engine/conversion-engine.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -43,6 +44,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     WebhookModule,
     SubscriptionModule,
     NotificationServiceModule,
+    ConversionEngineModule,
   ],
   controllers: [],
   providers: [
