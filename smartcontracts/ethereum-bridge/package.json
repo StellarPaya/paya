@@ -1,0 +1,19 @@
+{
+  "name": "paya-ethereum-bridge",
+  "version": "1.0.0",
+  "description": "Ethereum and Polygon bridge contracts for Paya cross-chain atomic swaps",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:ethereum": "hardhat run scripts/deploy-ethereum.js --network ethereum",
+    "deploy:polygon": "hardhat run scripts/deploy-polygon.js --network polygon"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0"
+  }
+}

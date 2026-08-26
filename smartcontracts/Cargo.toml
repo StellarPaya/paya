@@ -8,6 +8,8 @@ members = [
   "contracts/payment_split_contract",
   "contracts/hello_world",
   "contracts/fraud_detection_contract",
+  "contracts/atomic_swap_contract",
+  "contracts/liquidity_pool_contract",
 ]
 
 [workspace.dependencies]

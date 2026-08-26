@@ -12,6 +12,7 @@ import { NotificationServiceModule } from './notification-service/notification-s
 import { AuthModule } from './auth/auth.module';
 import { ConversionEngineModule } from './conversion-engine/conversion-engine.module';
 import { FraudDetectionModule } from './fraud-detection/fraud-detection.module';
+import { CrossChainBridgeModule } from './cross-chain-bridge/cross-chain-bridge.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -47,6 +48,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     NotificationServiceModule,
     ConversionEngineModule,
     FraudDetectionModule,
+    CrossChainBridgeModule,
   ],
   controllers: [],
   providers: [
