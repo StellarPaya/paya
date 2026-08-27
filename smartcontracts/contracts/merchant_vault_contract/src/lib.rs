@@ -137,6 +137,153 @@ impl MerchantVaultContract {
             .map(|r| r.usdc_balance)
             .unwrap_or(0)
     }
+
+    /// Deposits funds to a merchant's vault with orchestration coordination
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `merchant` - Stellar address of the merchant
+    /// * `amount` - Amount to deposit (in smallest currency units)
+    /// * `orchestration_id` - Orchestration ID for atomic coordination
+    /// 
+    /// # Returns
+    /// Result indicating success or error
+    /// 
+    /// # Pre-conditions
+    /// - Caller must be the admin (oracle authorization)
+    /// - Amount must be positive
+    /// - Merchant address must be valid
+    /// 
+    /// # Post-conditions
+    /// - Amount is locked in pending state
+    /// - State checkpoint is created
+    /// - Pending deposit record is created
+    /// - DepositPending event is emitted
+    /// 
+    /// # Events
+    /// Emits DepositPending event
+    /// 
+    /// # Errors
+    /// - NotAuthorized if caller is not admin
+    /// - InvalidAmount if amount is not positive
+    /// 
+    /// # Gas Cost
+    /// ~22,000 gas (auth check + checkpoint + storage writes + event)
+    /// 
+    /// # Access Control
+    /// Only admin can call this function (oracle pattern)
+    pub fn deposit_atomic(env: Env, merchant: Address, amount: i128, orchestration_id: String) -> Result<(), crate::types::Error> {
+        logic::deposit_atomic(&env, merchant, amount, orchestration_id)
+    }
+
+    /// Commit a pending deposit (move from locked to available balance)
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `merchant` - Stellar address of the merchant
+    /// * `orchestration_id` - Orchestration ID for coordination
+    /// 
+    /// # Returns
+    /// Result indicating success or error
+    /// 
+    /// # Pre-conditions
+    /// - Caller must be admin
+    /// - Pending deposit must exist
+    /// - Deposit must be in PENDING status
+    /// 
+    /// # Post-conditions
+    /// - Amount is moved from locked to available balance
+    /// - Deposit status changes to COMMITTED
+    /// - Checkpoint is cleared
+    /// - DepositCommitted event is emitted
+    /// 
+    /// # Events
+    /// Emits DepositCommitted event
+    /// 
+    /// # Errors
+    /// - NotAuthorized if caller is not admin
+    /// - DepositNotFound if pending deposit doesn't exist
+    /// - InvalidDepositStatus if not in PENDING status
+    /// 
+    /// # Gas Cost
+    /// ~18,000 gas (auth check + state updates + event)
+    /// 
+    /// # Access Control
+    /// Only admin can commit deposits
+    pub fn commit_deposit(env: Env, merchant: Address, orchestration_id: String) -> Result<(), crate::types::Error> {
+        logic::commit_deposit(&env, merchant, orchestration_id)
+    }
+
+    /// Rollback a pending deposit (compensating transaction)
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `merchant` - Stellar address of the merchant
+    /// * `orchestration_id` - Orchestration ID for coordination
+    /// 
+    /// # Returns
+    /// Result indicating success or error
+    /// 
+    /// # Pre-conditions
+    /// - Caller must be admin
+    /// - Pending deposit must exist
+    /// - Deposit must be in PENDING status
+    /// - Orchestration ID must match
+    /// 
+    /// # Post-conditions
+    /// - Balance is restored from checkpoint
+    /// - Locked balance is reduced
+    /// - Deposit status changes to ROLLED_BACK
+    /// - Checkpoint is cleared
+    /// - DepositRolledBack event is emitted
+    /// 
+    /// # Events
+    /// Emits DepositRolledBack event
+    /// 
+    /// # Errors
+    /// - NotAuthorized if caller is not admin
+    /// - DepositNotFound if pending deposit doesn't exist
+    /// - InvalidDepositStatus if not in PENDING status
+    /// - OrchestrationMismatch if orchestration ID doesn't match
+    /// 
+    /// # Gas Cost
+    /// ~20,000 gas (auth check + checkpoint restore + state updates + event)
+    /// 
+    /// # Access Control
+    /// Only admin can rollback deposits
+    pub fn rollback_deposit(env: Env, merchant: Address, orchestration_id: String) -> Result<(), crate::types::Error> {
+        logic::rollback_deposit(&env, merchant, orchestration_id)
+    }
+
+    /// Get state checkpoint for a deposit
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `orchestration_id` - Orchestration ID to get checkpoint for
+    /// 
+    /// # Returns
+    /// Deposit checkpoint or error
+    /// 
+    /// # Pre-conditions
+    /// - Checkpoint must exist
+    /// 
+    /// # Post-conditions
+    /// - None (read-only operation)
+    /// 
+    /// # Events
+    /// None
+    /// 
+    /// # Errors
+    /// - DepositNotFound if checkpoint doesn't exist
+    /// 
+    /// # Gas Cost
+    /// ~5,000 gas (storage read)
+    /// 
+    /// # Access Control
+    /// Public function - anyone can query checkpoints
+    pub fn get_state_checkpoint(env: Env, orchestration_id: String) -> Result<crate::types::DepositCheckpoint, crate::types::Error> {
+        logic::get_state_checkpoint(&env, orchestration_id)
+    }
 }
 
 #[cfg(test)]

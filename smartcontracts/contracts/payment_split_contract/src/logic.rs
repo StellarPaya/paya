@@ -1,9 +1,9 @@
 use soroban_sdk::{Env, Address, String, Vec, Symbol, symbol_short};
 use crate::types::{
     PaymentSplit, Recipient, Milestone, SplitDistribution, SplitStatus, 
-    SplitType, MilestoneStatus, ContractError, SplitConfig, RefundRequest, RefundStatus
+    SplitType, MilestoneStatus, ContractError, SplitConfig, RefundRequest, RefundStatus, SplitCheckpoint
 };
-use crate::storage::{get_split, set_split, get_distribution, set_distribution, get_config, has_split, get_security_config, get_refund_request, set_refund_request, get_reentrancy_guard, set_reentrancy_guard, clear_reentrancy_guard};
+use crate::storage::{get_split, set_split, get_distribution, set_distribution, get_config, has_split, get_security_config, get_refund_request, set_refund_request, get_reentrancy_guard, set_reentrancy_guard, clear_reentrancy_guard, get_split_checkpoint, set_split_checkpoint, remove_split_checkpoint};
 
 pub fn validate_recipients(recipients: &Vec<Recipient>, split_type: &SplitType, config: &SplitConfig) -> Result<(), ContractError> {
     if recipients.len() == 0 {
@@ -621,6 +621,23 @@ pub fn retry_failed_distributions(env: &Env, split_id: String, retryer: Address)
     Ok(split)
 }
 
+pub fn reject_refund(env: &Env, refund_id: String, admin: Address) -> Result<RefundRequest, ContractError> {
+    let config = get_security_config(env);
+    if config.admin_address != admin {
+        return Err(ContractError::Unauthorized);
+    }
+
+    let mut refund = get_refund_request(env, &refund_id)?;
+    if refund.status != RefundStatus::Requested {
+        return Err(ContractError::InvalidRefundAmount);
+    }
+
+    refund.status = RefundStatus::Rejected;
+    set_refund_request(env, &refund_id, &refund);
+
+    Ok(refund)
+}
+
 /// Request a refund for a split
 pub fn request_refund(
     env: &Env,
@@ -733,35 +750,110 @@ pub fn complete_refund(
     split.refund_status = RefundStatus::Completed;
     split.status = SplitStatus::Refunded;
     set_split(env, &refund_request.split_id, &split);
-    
-    Ok(refund_request)
+
+    Ok(split)
 }
 
-/// Reject a refund request (admin only)
-pub fn reject_refund(
+pub fn execute_split_atomic(
     env: &Env,
-    refund_id: String,
-    admin: Address,
-) -> Result<RefundRequest, ContractError> {
-    let security_config = get_security_config(env);
-    
-    // Verify admin
-    if security_config.admin_address != admin {
-        return Err(ContractError::AdminOnly);
+    split_id: String,
+    executor: Address,
+    orchestration_id: String,
+) -> Result<PaymentSplit, ContractError> {
+    let mut split = get_split(env, &split_id)?;
+
+    // Verify orchestration ID matches
+    if split.orchestration_id != Some(orchestration_id.clone()) {
+        return Err(ContractError::OrchestrationMismatch);
     }
-    
-    let mut refund_request = get_refund_request(env, &refund_id)?;
-    
-    // Check if already processed
-    if refund_request.status != RefundStatus::Requested {
-        return Err(ContractError::RefundAlreadyProcessed);
+
+    // Check reentrancy
+    if get_reentrancy_guard(env) {
+        return Err(ContractError::ReentrancyDetected);
     }
-    
-    // Mark as rejected
-    refund_request.status = RefundStatus::Rejected;
-    
-    set_refund_request(env, &refund_id, &refund_request);
-    Ok(refund_request)
+    set_reentrancy_guard(env, true);
+
+    // Validate state
+    if split.status != SplitStatus::Pending {
+        clear_reentrancy_guard(env);
+        return Err(ContractError::InvalidSplitState);
+    }
+
+    // Create checkpoint before execution
+    let checkpoint_id = format!("{}_execute", orchestration_id);
+    let checkpoint = SplitCheckpoint {
+        checkpoint_id: checkpoint_id.clone(),
+        orchestration_id: orchestration_id.clone(),
+        split_id: split_id.clone(),
+        previous_status: split.status.clone(),
+        distributed_amounts: Vec::new(env),
+        timestamp: env.ledger().timestamp(),
+    };
+    set_split_checkpoint(env, &checkpoint_id, &checkpoint);
+
+    // Update status
+    split.status = SplitStatus::Executing;
+    split.executed_at = env.ledger().timestamp();
+    set_split(env, &split_id, &split);
+
+    clear_reentrancy_guard(env);
+
+    // Emit event
+    env.events().publish(
+        (symbol_short!("split_executed_atomic"), split_id.clone()),
+        (split_id.clone(), orchestration_id.clone())
+    );
+
+    Ok(split)
+}
+
+pub fn rollback_split(
+    env: &Env,
+    split_id: String,
+    orchestration_id: String,
+) -> Result<PaymentSplit, ContractError> {
+    let mut split = get_split(env, &split_id)?;
+
+    // Verify orchestration ID matches
+    if split.orchestration_id != Some(orchestration_id.clone()) {
+        return Err(ContractError::OrchestrationMismatch);
+    }
+
+    // Check reentrancy
+    if get_reentrancy_guard(env) {
+        return Err(ContractError::ReentrancyDetected);
+    }
+    set_reentrancy_guard(env, true);
+
+    // Restore from checkpoint
+    let checkpoint_id = format!("{}_execute", orchestration_id);
+    if let Ok(checkpoint) = get_split_checkpoint(env, &checkpoint_id) {
+        split.status = checkpoint.previous_status;
+        split.executed_at = 0;
+    } else {
+        // If no checkpoint, just revert to Pending
+        split.status = SplitStatus::Pending;
+        split.executed_at = 0;
+    }
+
+    set_split(env, &split_id, &split);
+
+    // Clear checkpoint
+    remove_split_checkpoint(env, &checkpoint_id);
+
+    clear_reentrancy_guard(env);
+
+    // Emit rollback event
+    env.events().publish(
+        (symbol_short!("split_rolled_back"), split_id.clone()),
+        (split_id.clone(), orchestration_id.clone())
+    );
+
+    Ok(split)
+}
+
+pub fn get_state_checkpoint(env: &Env, checkpoint_id: String) -> Result<SplitCheckpoint, ContractError> {
+    get_split_checkpoint(env, &checkpoint_id)
 }
 
 /// Set reentrancy guard (call before sensitive operations)

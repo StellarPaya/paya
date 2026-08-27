@@ -1,5 +1,5 @@
 use soroban_sdk::{Env, Symbol, String, Address, symbol_short};
-use crate::types::{PaymentSplit, SplitDistribution, SplitConfig, RefundRequest, SecurityConfig, ContractError};
+use crate::types::{PaymentSplit, SplitDistribution, SplitConfig, RefundRequest, SecurityConfig, ContractError, SplitCheckpoint};
 
 const DATA_KEY_SPLIT: Symbol = symbol_short!("SPLIT");
 const DATA_KEY_DISTRIBUTION: Symbol = symbol_short!("DIST");
@@ -7,6 +7,7 @@ const DATA_KEY_CONFIG: Symbol = symbol_short!("CONF");
 const DATA_KEY_REFUND: Symbol = symbol_short!("REFD");
 const DATA_KEY_SECURITY: Symbol = symbol_short!("SECU");
 const DATA_KEY_REENTRANCY: Symbol = symbol_short!("RENT");
+const DATA_KEY_CHECKPOINT: Symbol = symbol_short!("CHKP");
 
 pub fn get_split(env: &Env, split_id: &String) -> Result<PaymentSplit, ContractError> {
     let key = (DATA_KEY_SPLIT, split_id.clone());
@@ -114,4 +115,22 @@ pub fn set_reentrancy_guard(env: &Env, guard: bool) {
 pub fn clear_reentrancy_guard(env: &Env) {
     let key = DATA_KEY_REENTRANCY;
     env.storage().temporary().remove(&key);
+}
+
+pub fn get_split_checkpoint(env: &Env, checkpoint_id: &String) -> Result<SplitCheckpoint, ContractError> {
+    let key = (DATA_KEY_CHECKPOINT, checkpoint_id.clone());
+    env.storage()
+        .persistent()
+        .get(&key)
+        .ok_or(ContractError::CheckpointNotFound)
+}
+
+pub fn set_split_checkpoint(env: &Env, checkpoint_id: &String, checkpoint: &SplitCheckpoint) {
+    let key = (DATA_KEY_CHECKPOINT, checkpoint_id.clone());
+    env.storage().persistent().set(&key, checkpoint);
+}
+
+pub fn remove_split_checkpoint(env: &Env, checkpoint_id: &String) {
+    let key = (DATA_KEY_CHECKPOINT, checkpoint_id.clone());
+    env.storage().persistent().remove(&key);
 }

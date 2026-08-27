@@ -10,6 +10,7 @@ members = [
   "contracts/fraud_detection_contract",
   "contracts/atomic_swap_contract",
   "contracts/liquidity_pool_contract",
+  "contracts/orchestration_contract",
 ]
 
 [workspace.dependencies]
