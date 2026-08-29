@@ -18,7 +18,8 @@ use crate::logic::{
     retry_failed_distributions, validate_recursive_structure,
     verify_condition, release_time_lock, request_refund, approve_refund,
     complete_refund, reject_refund, set_reentrancy_protection,
-    clear_reentrancy_protection, pause_contract, unpause_contract, is_contract_paused
+    clear_reentrancy_protection, pause_contract, unpause_contract, is_contract_paused,
+    create_split_atomic, execute_split_atomic, rollback_split, get_state_checkpoint
 };
 use crate::storage::{get_split, get_distribution, get_config, set_config};
 
@@ -890,40 +891,6 @@ impl PaymentSplitContract {
         reject_refund(&env, refund_id, admin)
     }
 
-    /// Pause the contract (admin only)
-    /// 
-    /// # Arguments
-    /// * `env` - The Soroban environment
-    /// * `admin` - Address of the admin
-    /// 
-    /// # Returns
-    /// Result indicating success or error
-    /// 
-    /// # Pre-conditions
-    /// - Caller must be admin
-    /// - Contract must not already be paused
-    /// 
-    /// # Post-conditions
-    /// - Contract pause flag is set
-    /// - All state-changing operations are blocked
-    /// - ContractPaused event is emitted
-    /// 
-    /// # Events
-    /// Emits ContractPaused event
-    /// 
-    /// # Errors
-    /// - Unauthorized if caller is not admin
-    /// - AlreadyPaused if contract already paused
-    /// 
-    /// # Gas Cost
-    /// ~10,000 gas (auth check + state update + event)
-    /// 
-    /// # Access Control
-    /// Only admin can pause the contract
-    pub fn pause_contract(env: Env, admin: Address) -> Result<(), ContractError> {
-        pause_contract(&env, admin)
-    }
-
     /// Unpause the contract (admin only)
     /// 
     /// # Arguments
@@ -985,5 +952,187 @@ impl PaymentSplitContract {
     /// Public function - anyone can check pause status
     pub fn is_contract_paused(env: Env) -> bool {
         is_contract_paused(&env)
+    }
+
+    /// Create a new payment split with orchestration coordination for atomic operations
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `split_id` - Unique identifier for the split
+    /// * `payment_id` - Reference to the original payment
+    /// * `merchant_address` - Address of the merchant creating the split
+    /// * `total_amount` - Total amount to be split
+    /// * `currency` - Currency address for the payment
+    /// * `split_type` - Type of split (percentage, fixed, milestone, etc.)
+    /// * `recipients` - List of recipients and their allocations
+    /// * `milestones` - Milestone definitions (for milestone-based splits)
+    /// * `orchestration_id` - Orchestration ID for atomic coordination
+    /// 
+    /// # Returns
+    /// Result containing the created PaymentSplit or error
+    /// 
+    /// # Pre-conditions
+    /// - Split ID must be unique
+    /// - Total amount must be positive
+    /// - Recipients must sum to 100% (for percentage splits) or match total (for fixed)
+    /// - Orchestration ID must be valid
+    /// 
+    /// # Post-conditions
+    /// - Split is stored with PENDING status
+    /// - Orchestration ID is stored for coordination
+    /// - State checkpoint is created
+    /// - SplitCreatedAtomic event is emitted
+    /// 
+    /// # Events
+    /// Emits SplitCreatedAtomic event
+    /// 
+    /// # Errors
+    /// - InvalidSplitConfig if configuration is invalid
+    /// - DuplicateSplitId if split ID already exists
+    /// 
+    /// # Gas Cost
+    /// ~40,000 gas (validation + checkpoint + storage writes + event)
+    /// 
+    /// # Access Control
+    /// Public function - anyone can create atomic splits
+    pub fn create_split_atomic(
+        env: Env,
+        split_id: String,
+        payment_id: String,
+        merchant_address: Address,
+        total_amount: i128,
+        currency: Address,
+        split_type: SplitType,
+        recipients: Vec<Recipient>,
+        milestones: Vec<Milestone>,
+        orchestration_id: String,
+    ) -> Result<PaymentSplit, ContractError> {
+        create_split_atomic(
+            &env,
+            split_id,
+            payment_id,
+            merchant_address,
+            total_amount,
+            currency,
+            split_type,
+            recipients,
+            milestones,
+            orchestration_id,
+        )
+    }
+
+    /// Execute a payment split with orchestration coordination (begin distribution)
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `split_id` - Unique identifier of the split to execute
+    /// * `executor` - Address executing the split
+    /// * `orchestration_id` - Orchestration ID for atomic coordination
+    /// 
+    /// # Returns
+    /// Result containing the updated PaymentSplit or error
+    /// 
+    /// # Pre-conditions
+    /// - Split must exist and be in PENDING status
+    /// - Orchestration ID must match
+    /// - Reentrancy protection must be clear
+    /// 
+    /// # Post-conditions
+    /// - Split status changes to EXECUTING
+    /// - State checkpoint is created
+    /// - SplitExecutedAtomic event is emitted
+    /// 
+    /// # Events
+    /// Emits SplitExecutedAtomic event
+    /// 
+    /// # Errors
+    /// - SplitNotFound if split doesn't exist
+    /// - InvalidSplitState if split not in PENDING status
+    /// - OrchestrationMismatch if orchestration ID doesn't match
+    /// - ReentrancyDetected if reentrancy detected
+    /// 
+    /// # Gas Cost
+    /// ~28,000 gas (validation + checkpoint + state updates + event)
+    /// 
+    /// # Access Control
+    /// Public function - anyone can execute atomic splits
+    pub fn execute_split_atomic(
+        env: Env,
+        split_id: String,
+        executor: Address,
+        orchestration_id: String,
+    ) -> Result<PaymentSplit, ContractError> {
+        execute_split_atomic(&env, split_id, executor, orchestration_id)
+    }
+
+    /// Rollback a split execution (compensating transaction)
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `split_id` - Unique identifier of the split
+    /// * `orchestration_id` - Orchestration ID for coordination
+    /// 
+    /// # Returns
+    /// Result containing the updated PaymentSplit or error
+    /// 
+    /// # Pre-conditions
+    /// - Split must exist
+    /// - Orchestration ID must match
+    /// - Reentrancy protection must be clear
+    /// 
+    /// # Post-conditions
+    /// - Split status is restored from checkpoint
+    /// - Checkpoint is cleared
+    /// - SplitRolledBack event is emitted
+    /// 
+    /// # Events
+    /// Emits SplitRolledBack event
+    /// 
+    /// # Errors
+    /// - SplitNotFound if split doesn't exist
+    /// - OrchestrationMismatch if orchestration ID doesn't match
+    /// - ReentrancyDetected if reentrancy detected
+    /// 
+    /// # Gas Cost
+    /// ~22,000 gas (checkpoint restore + state updates + event)
+    /// 
+    /// # Access Control
+    /// Public function - anyone can rollback splits
+    pub fn rollback_split(
+        env: Env,
+        split_id: String,
+        orchestration_id: String,
+    ) -> Result<PaymentSplit, ContractError> {
+        rollback_split(&env, split_id, orchestration_id)
+    }
+
+    /// Get state checkpoint for a split
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `checkpoint_id` - Checkpoint ID to retrieve
+    /// 
+    /// # Returns
+    /// Split checkpoint or error
+    /// 
+    /// # Pre-conditions
+    /// - Checkpoint must exist
+    /// 
+    /// # Post-conditions
+    /// - None (read-only operation)
+    /// 
+    /// # Events
+    /// None
+    /// 
+    /// # Errors
+    /// - CheckpointNotFound if checkpoint doesn't exist
+    /// 
+    /// # Gas Cost
+    /// ~5,000 gas (storage read)
+    /// 
+    /// # Access Control
+    /// Public function - anyone can query checkpoints
+    pub fn get_state_checkpoint(env: Env, checkpoint_id: String) -> Result<crate::types::SplitCheckpoint, ContractError> {
+        get_state_checkpoint(&env, checkpoint_id)
     }
 }

@@ -28,6 +28,9 @@ pub enum ContractError {
     Underflow = 22,
     InvalidAddress = 23,
     AdminOnly = 24,
+    OrchestrationMismatch = 25,
+    CheckpointNotFound = 26,
+    InvalidSplitState = 27,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -160,6 +163,7 @@ pub struct PaymentSplit {
     pub refund_status: RefundStatus,
     pub refunded_amount: i128,
     pub refund_fee: i128,
+    pub orchestration_id: Option<String>,
 }
 
 #[contracttype]
@@ -214,4 +218,15 @@ pub struct SplitConfig {
     pub max_split_percentage: i128,
     pub require_merchant_approval: bool,
     pub enable_auto_retry: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitCheckpoint {
+    pub checkpoint_id: String,
+    pub orchestration_id: String,
+    pub split_id: String,
+    pub previous_status: SplitStatus,
+    pub distributed_amounts: Vec<(Address, i128)>,
+    pub timestamp: u64,
 }
