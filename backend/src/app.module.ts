@@ -15,6 +15,9 @@ import { FraudDetectionModule } from './fraud-detection/fraud-detection.module';
 import { CrossChainBridgeModule } from './cross-chain-bridge/cross-chain-bridge.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { EventSourcingModule } from './event-sourcing/event-sourcing.module';
+import { MessageQueueModule } from './event-sourcing/message-queue/message-queue.module';
+import { ReplayModule } from './event-sourcing/replay/replay.module';
 
 @Module({
   imports: [
@@ -49,6 +52,9 @@ import { RolesGuard } from './auth/guards/roles.guard';
     ConversionEngineModule,
     FraudDetectionModule,
     CrossChainBridgeModule,
+    EventSourcingModule,
+    MessageQueueModule,
+    ReplayModule,
   ],
   controllers: [],
   providers: [
