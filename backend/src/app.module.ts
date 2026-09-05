@@ -18,6 +18,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { EventSourcingModule } from './event-sourcing/event-sourcing.module';
 import { MessageQueueModule } from './event-sourcing/message-queue/message-queue.module';
 import { ReplayModule } from './event-sourcing/replay/replay.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ReplayModule } from './event-sourcing/replay/replay.module';
     EventSourcingModule,
     MessageQueueModule,
     ReplayModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [
