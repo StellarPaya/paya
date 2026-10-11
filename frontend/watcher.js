@@ -1,6 +1,9 @@
 // Stellar blockchain watcher for Paya
 // Monitors deposit addresses for incoming payments and updates payment status
 // Run with: node frontend/watcher.js
+//
+// SECURITY WARNING: This watcher is for MVP/demo purposes only.
+// For production, use proper on-chain verification via payment_registry_contract.
 
 import fs from 'fs'
 import path from 'path'
@@ -11,6 +14,18 @@ const DATA_FILE = path.resolve(process.cwd(), 'frontend/data/payments.json')
 // Configuration
 const HORIZON_URL = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org'
 const NETWORK_PASSPHRASE = process.env.STELLAR_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015'
+
+// USDC issuer addresses (must match the network)
+const USDC_ISSUERS = {
+  'Test SDF Network ; September 2015': 'GBBD47IF6LWK7P7TDEVARSZ3R3NE7K6T4UX4LJTKQN4K7MXFLR7WU4AB2',
+  'Public Global Stellar Network ; September 2015': 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGFX3OBWEYEWLMXXAL2JG2'
+}
+
+// Get the correct USDC issuer for the current network
+const USDC_ISSUER = USDC_ISSUERS[NETWORK_PASSPHRASE]
+
+// Feature flag for manual fallback (DEMO ONLY - set to false in production)
+const ENABLE_MANUAL_FALLBACK = process.env.ENABLE_MANUAL_FALLBACK === 'true' || false
 
 // Initialize Stellar server
 const server = new Server(HORIZON_URL)
@@ -77,39 +92,60 @@ async function checkAddressTransactions(depositAddress, addressPayments, allPaym
     const ops = await server.operations().forTransaction(tx.id).call()
 
     for (const op of ops.records) {
-      if (op.type === 'payment' && op.asset_type === 'credit_alphanum4' && op.asset_code === 'USDC') {
-        // Check if this payment matches any pending payment by memo
-        const memo = tx.memo ? tx.memo.toString() : null
+      // Verify it's a payment operation
+      if (op.type !== 'payment') continue
+
+      // Verify it's USDC (check both asset code and issuer)
+      const isUSDC = op.asset_type === 'credit_alphanum4' && 
+                     op.asset_code === 'USDC' && 
+                     op.asset_issuer === USDC_ISSUER
+
+      if (!isUSDC) {
+        console.log(`⚠ Skipping non-USDC payment: ${op.asset_code} from issuer ${op.asset_issuer}`)
+        continue
+      }
+
+      // Check if this payment matches any pending payment by memo
+      const memo = tx.memo ? tx.memo.toString() : null
+      
+      if (!memo) {
+        console.log(`⚠ Transaction ${tx.id} has no memo, skipping`)
+        continue
+      }
+
+      const matchingPayment = addressPayments.find(p => p.memo === memo)
+      
+      if (matchingPayment) {
+        // Verify amount matches exactly (no tolerance for security)
+        const txAmount = parseFloat(op.amount)
+        const expectedAmount = parseFloat(matchingPayment.amount)
         
-        if (memo) {
-          const matchingPayment = addressPayments.find(p => p.memo === memo)
-          
-          if (matchingPayment) {
-            // Verify amount matches (allow for small rounding differences)
-            const txAmount = parseFloat(op.amount)
-            const expectedAmount = parseFloat(matchingPayment.amount)
-            
-            if (Math.abs(txAmount - expectedAmount) < 0.01) {
-              // Update payment status
-              const paymentIndex = allPayments.findIndex(p => p.id === matchingPayment.id)
-              if (paymentIndex !== -1) {
-                console.log(`✓ Payment ${matchingPayment.id} confirmed! Amount: ${op.amount}`)
-                allPayments[paymentIndex].status = 'PAID'
-                allPayments[paymentIndex].txHash = tx.hash
-                allPayments[paymentIndex].updatedAt = Date.now()
-              }
-            } else {
-              console.log(`⚠ Payment ${matchingPayment.id} found but amount mismatch: expected ${expectedAmount}, got ${txAmount}`)
-            }
+        // Use exact matching for security - no tolerance
+        if (txAmount === expectedAmount) {
+          // Update payment status
+          const paymentIndex = allPayments.findIndex(p => p.id === matchingPayment.id)
+          if (paymentIndex !== -1) {
+            console.log(`✓ Payment ${matchingPayment.id} confirmed! Amount: ${op.amount} USDC`)
+            allPayments[paymentIndex].status = 'PAID'
+            allPayments[paymentIndex].txHash = tx.hash
+            allPayments[paymentIndex].updatedAt = Date.now()
           }
+        } else {
+          console.log(`⚠ Payment ${matchingPayment.id} found but amount mismatch: expected ${expectedAmount}, got ${txAmount}`)
         }
       }
     }
   }
 }
 
-// Alternative: Manual mark as paid for demo/testing
+// Alternative: Manual mark as paid for demo/testing ONLY
+// SECURITY WARNING: This bypasses blockchain verification and should NEVER be used in production
 async function checkManualMark() {
+  if (!ENABLE_MANUAL_FALLBACK) {
+    console.log('Manual fallback is disabled. Set ENABLE_MANUAL_FALLBACK=true to enable (DEMO ONLY).')
+    return
+  }
+
   if (!fs.existsSync(DATA_FILE)) return
   
   const payments = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
@@ -117,7 +153,8 @@ async function checkManualMark() {
 
   for (const p of payments) {
     if (p.status === 'PENDING' && p.manualMarkPaid === true) {
-      console.log(`✓ Manually marking payment ${p.id} as PAID`)
+      console.warn(`⚠ DEMO MODE: Manually marking payment ${p.id} as PAID without blockchain verification`)
+      console.warn(`⚠ This should NEVER be used in production!`)
       p.status = 'PAID'
       p.txHash = 'DEMO_MANUAL_TX_' + Date.now()
       p.updatedAt = Date.now()
@@ -138,9 +175,16 @@ async function check() {
     await checkPayments()
   } catch (error) {
     console.error('Error in blockchain monitoring:', error.message)
-    console.log('Falling back to manual mark check...')
-    // Fallback to manual mark for demo
-    await checkManualMark()
+    
+    // Only use manual fallback if explicitly enabled (DEMO ONLY)
+    if (ENABLE_MANUAL_FALLBACK) {
+      console.warn('⚠ Falling back to manual mark check (DEMO MODE ONLY)')
+      console.warn('⚠ This bypasses blockchain verification and should NEVER be used in production!')
+      await checkManualMark()
+    } else {
+      console.error('Blockchain monitoring failed and manual fallback is disabled.')
+      console.error('Payments will not be processed. Please check the Horizon connection.')
+    }
   }
 }
 

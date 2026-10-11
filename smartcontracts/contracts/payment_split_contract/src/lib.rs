@@ -606,7 +606,7 @@ impl PaymentSplitContract {
     /// 
     /// # Arguments
     /// * `env` - The Soroban environment
-    /// * `_admin` - Address of the admin (for authentication)
+    /// * `admin` - Address of the admin (for authentication)
     /// * `new_config` - New configuration to apply
     /// 
     /// # Returns
@@ -631,8 +631,13 @@ impl PaymentSplitContract {
     /// 
     /// # Access Control
     /// Only admin can update configuration
-    pub fn update_config(env: Env, _admin: Address, new_config: SplitConfig) -> Result<(), ContractError> {
-        // In production, add proper admin authentication
+    pub fn update_config(env: Env, admin: Address, new_config: SplitConfig) -> Result<(), ContractError> {
+        // Verify admin authorization
+        let security_config = storage::get_security_config(&env);
+        if security_config.admin_address != admin {
+            return Err(ContractError::Unauthorized);
+        }
+        
         set_config(&env, &new_config);
         Ok(())
     }

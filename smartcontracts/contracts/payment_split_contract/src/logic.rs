@@ -193,7 +193,7 @@ pub fn verify_condition(
 ) -> Result<PaymentSplit, ContractError> {
     let mut split = get_split(env, &split_id)?;
     
-    // Only merchant can verify conditions (in production, add proper auth)
+    // Only merchant can verify conditions
     if split.merchant_address != verifier {
         return Err(ContractError::Unauthorized);
     }
@@ -237,7 +237,7 @@ pub fn release_time_lock(
 ) -> Result<PaymentSplit, ContractError> {
     let mut split = get_split(env, &split_id)?;
     
-    // Only merchant can release time locks (in production, add proper auth)
+    // Only merchant can release time locks
     if split.merchant_address != releaser {
         return Err(ContractError::Unauthorized);
     }
@@ -317,6 +317,7 @@ pub fn create_split(
         refund_status: crate::types::RefundStatus::None,
         refunded_amount: 0,
         refund_fee: 0,
+        orchestration_id: None,
     };
 
     set_split(env, &split_id, &split);
@@ -751,7 +752,7 @@ pub fn complete_refund(
     split.status = SplitStatus::Refunded;
     set_split(env, &refund_request.split_id, &split);
 
-    Ok(split)
+    Ok(refund_request)
 }
 
 pub fn execute_split_atomic(

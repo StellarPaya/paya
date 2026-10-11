@@ -265,9 +265,11 @@ pub fn process_billing(
     let _payment_registry = storage::get_payment_registry_address(env)
         .ok_or(Error::PaymentFailed)?;
     
-    // TODO: Implement cross-contract calls using soroban-sdk v27 API
-    // For now, we'll skip the actual integration calls
-    // This would involve calling merchant_vault.deposit and payment_registry.create_payment
+    // NOTE: Cross-contract calls to merchant_vault.deposit and payment_registry.create_payment
+    // should be implemented here using the Soroban SDK's cross-contract call API.
+    // This requires the contract to have sufficient authorization and the integration
+    // contracts to be properly initialized. The current implementation records the billing
+    // event but does not execute the actual token transfers.
     
     subscription.current_cycle += 1;
     subscription.last_billing_at = Some(now);

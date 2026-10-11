@@ -27,15 +27,26 @@ Paya is an open-source, global crypto payment infrastructure that lets businesse
 ### What Paya Does
 
 | Feature | Description |
-|---|---|
-| **Payment Gateway** | Accept BTC, ETH, USDC, XLM; auto-convert to USDC on Stellar |
-| **On-Ramp** | Fiat → USDC via card or bank transfer |
-| **Off-Ramp** | USDC → bank account |
+| --- | --- |
+| **Payment Gateway** | Accept crypto payments; settle as USDC on Stellar |
 | **Escrow** | Smart contract escrow for freelance/marketplace use cases |
 | **Payment Splits** | Auto-split payments to multiple addresses |
 | **Subscriptions** | Recurring billing on-chain |
-| **Merchant Dashboard** | Analytics, balances, API keys, withdrawals |
-| **Developer API/SDK** | REST API + JS/Python/Go SDKs |
+| **Merchant Dashboard** | Analytics, balances, withdrawals |
+| **Developer API** | REST API for payment integration |
+
+### Current Status (MVP)
+
+**⚠️ Important:** The current implementation is an MVP. See [MVP_SUMMARY.md](MVP_SUMMARY.md) for detailed information about the current state.
+
+- **Frontend:** Next.js 14 with file-based storage for payments (temporary)
+- **Blockchain Monitoring:** JavaScript watcher monitors Stellar Horizon API
+- **Smart Contracts:** Core contracts deployed (payment_registry, merchant_vault, escrow)
+- **Backend:** NestJS backend exists but is not yet integrated with frontend
+
+### Repository Audit
+
+A comprehensive repository audit has been completed. See [docs/REPOSITORY_AUDIT.md](docs/REPOSITORY_AUDIT.md) for detailed findings, recommendations, and security considerations.
 
 ### Settlement Layer
 
@@ -45,7 +56,34 @@ All payments settle as **USDC on the Stellar network** via Soroban smart contrac
 
 ## Architecture
 
+### MVP Architecture (Current)
+
+```text
+Users / Customers
+        │
+        ▼
+Frontend (Next.js 14 + TypeScript)
+        │  File-based storage (temporary)
+        │  API Routes: /api/create-payment, /api/payment-status, /api/payments
+        │
+        ▼
+Blockchain Watcher (JavaScript)
+        │  Monitors Stellar Horizon API for USDC payments
+        │  Updates payment status in local JSON file
+        │
+        ▼
+Stellar Network (Testnet)
+        │
+        ▼
+Soroban Smart Contracts (Deployed)
+        ├── payment_registry_contract  (MVP)
+        ├── merchant_vault_contract    (MVP)
+        └── escrow_contract            (MVP)
 ```
+
+### Planned Architecture (Future)
+
+```text
 Users / Customers
         │
         ▼
@@ -56,7 +94,7 @@ Backend Gateway (NestJS)
         │
         ├── Payment Service       → create, track, settle payments
         ├── Ramp Service          → fiat on/off ramp processing
-        ├── Conversion Engine     → BTC/ETH → USDC conversion
+        ├── Conversion Engine     → crypto → USDC conversion
         ├── Blockchain Listener   → watch Stellar transactions
         └── Notification Service → webhooks, email, alerts
         │
@@ -70,52 +108,89 @@ Soroban Smart Contracts
         ├── escrow_contract
         ├── payment_split_contract
         ├── subscription_contract
-        └── fee_manager_contract
+        ├── fraud_detection_contract
+        ├── atomic_swap_contract
+        ├── liquidity_pool_contract
+        └── orchestration_contract
 ```
 
 ---
 
 ## Repository Structure
 
-```
+```text
 Paya/
 │
-├── contracts/                        # Soroban smart contracts (Rust)
-│   ├── escrow_contract/
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── types.rs
-│   │   │   ├── storage.rs
-│   │   │   └── logic.rs
-│   │   └── Cargo.toml
-│   ├── payment_split_contract/
-│   ├── subscription_contract/
-│   ├── merchant_vault_contract/
-│   ├── payment_registry_contract/
-│   └── fee_manager_contract/
+├── smartcontracts/                   # Soroban smart contracts (Rust)
+│   ├── contracts/
+│   │   ├── payment_registry_contract/   # Core payment tracking (MVP)
+│   │   ├── merchant_vault_contract/     # Merchant balance management (MVP)
+│   │   ├── escrow_contract/             # Escrow payments (MVP)
+│   │   ├── payment_split_contract/      # Payment splitting
+│   │   ├── subscription_contract/       # Recurring billing
+│   │   ├── fraud_detection_contract/    # On-chain fraud detection
+│   │   ├── atomic_swap_contract/        # HTLC cross-chain swaps
+│   │   ├── liquidity_pool_contract/      # AMM liquidity pool
+│   │   ├── orchestration_contract/      # Saga pattern orchestration
+│   │   ├── refund_contract/             # Refund management
+│   │   └── hello_world/                 # Test contract
+│   ├── Cargo.toml                       # Workspace manifest
+│   └── scripts/
+│       └── deploy-contracts.sh         # Deployment script
 │
-├── backend/                          # NestJS backend services
-│   ├── api_gateway/
-│   ├── payment_service/
-│   ├── ramp_service/
-│   ├── blockchain_listener/
-│   ├── conversion_engine/
-│   └── notification_service/
+├── backend/                          # NestJS backend (not yet integrated)
+│   ├── src/
+│   │   ├── auth/                       # Authentication module
+│   │   ├── payment-split/              # Payment split service
+│   │   ├── subscription/               # Subscription service
+│   │   ├── refund/                     # Refund service
+│   │   ├── webhook/                    # Webhook service
+│   │   ├── websocket/                  # WebSocket service
+│   │   ├── fraud-detection/            # Fraud detection service
+│   │   ├── conversion-engine/          # Currency conversion
+│   │   ├── cross-chain-bridge/         # Cross-chain bridge
+│   │   ├── event-sourcing/              # Event sourcing
+│   │   ├── message-queue/              # Message queue (BullMQ)
+│   │   └── notification-service/        # Notification service
+│   ├── package.json
+│   └── .github/workflows/ci.yml
 │
-├── frontend/                         # Next.js frontend
+├── frontend/                         # Next.js 14 frontend (MVP)
 │   ├── app/
-│   ├── components/
-│   ├── dashboard/
-│   ├── checkout/
-│   ├── hooks/
-│   └── services/
+│   │   ├── api/                       # API routes (file-based storage)
+│   │   │   ├── create-payment/
+│   │   │   ├── payment-status/
+│   │   │   └── payments/
+│   │   ├── dashboard/                 # Dashboard pages
+│   │   ├── checkout/                  # Checkout pages
+│   │   └── payment-status/            # Payment status pages
+│   ├── components/                    # React components
+│   ├── data/                          # Local data storage (gitignored)
+│   ├── watcher.js                     # Blockchain watcher
+│   ├── package.json
+│   └── .github/workflows/ci.yml
+│
+├── ml-service/                       # Python ML service for fraud detection
+│   ├── app.py                         # FastAPI application
+│   ├── models/                        # Trained ML models
+│   ├── requirements.txt
+│   └── README.md
 │
 ├── docs/                             # Documentation
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   └── workflows/
+│   ├── REPOSITORY_AUDIT.md            # Comprehensive audit report
+│   ├── FRAUD_DETECTION_SYSTEM.md      # Fraud detection docs
+│   ├── MVP_SUMMARY.md                 # MVP implementation details
+│   ├── ARCHITECTURE.md                # Architecture documentation
+│   └── PROJECT_STRUCTURE.md           # Project structure guide
+│
+├── scripts/                          # Utility scripts
+│   └── deploy-contracts.sh            # Contract deployment
+│
+├── .env.example                      # Environment variables template
+├── .gitignore
+├── README.md
 ├── CONTRIBUTING.md
-└── README.md
+└── PAYA.md
 ```
 
 ---
@@ -125,64 +200,60 @@ Paya/
 ### Prerequisites
 
 | Tool | Version |
-|---|---|
+| --- | --- |
 | Node.js | >= 18 |
 | Rust | Latest stable |
 | Soroban CLI | Latest |
-| Docker | >= 20 |
 | pnpm | >= 8 |
 
 ### 1. Clone the Repository
 
 ```bash
-git clone  https://github.com/StellarPaya/paya.git
+git clone https://github.com/StellarPaya/paya.git
 cd paya
 ```
 
-### 2. Install Frontend Dependencies
-
-```bash
-cd frontend
-npm install
-```
-
-### 3. Install Backend Dependencies
-
-```bash
-cd backend
-npm install
-```
-
-### 4. Set Up Smart Contract Environment
-
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install Soroban CLI
-cargo install --locked soroban-cli
-
-# Add the WASM target
-rustup target add wasm32-unknown-unknown
-```
-
-### 5. Configure Environment Variables
+### 2. Set Up Environment Variables
 
 ```bash
 cp .env.example .env
-# Fill in values — see Environment Variables section below
+# Edit .env with your configuration
 ```
 
-### 6. Run Local Development
+### 3. Start the Frontend (MVP)
 
 ```bash
-# Start all services with Docker Compose
-docker-compose up
-
-# Or run individually
-cd frontend && pnpm dev          # http://localhost:3000
-cd backend && pnpm start:dev     # http://localhost:4000
+cd frontend
+pnpm install
+pnpm dev
 ```
+
+The frontend will be available at `http://localhost:3000`.
+
+### 4. Start the Blockchain Watcher
+
+In a separate terminal:
+
+```bash
+cd frontend
+node watcher.js
+```
+
+The watcher monitors Stellar Horizon API for USDC payments.
+
+### 5. Deploy Smart Contracts (Optional)
+
+See [scripts/deploy-contracts.sh](scripts/deploy-contracts.sh) for deployment instructions.
+
+### 6. Start ML Service (Optional)
+
+```bash
+cd ml-service
+pip install -r requirements.txt
+python app.py
+```
+
+The ML service will be available at `http://localhost:8000`.
 
 ---
 
