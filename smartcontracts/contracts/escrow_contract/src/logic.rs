@@ -1,4 +1,4 @@
-use soroban_sdk::{Env, Address, String, symbol_short};
+use soroban_sdk::{Env, Address, String, Symbol};
 use crate::storage;
 use crate::types::{Escrow, EscrowStatus, EscrowCheckpoint, Error};
 
@@ -6,6 +6,155 @@ pub fn initialize(env: &Env, admin: Address) {
     if storage::get_admin(env).is_none() {
         storage::set_admin(env, &admin);
     }
+}
+
+pub fn create_escrow(
+    env: &Env,
+    escrow_id: String,
+    buyer: Address,
+    seller: Address,
+    amount: i128,
+    currency: Address,
+    release_condition: String,
+    dispute_deadline: u64,
+) -> Result<Escrow, Error> {
+    buyer.require_auth();
+
+    if amount <= 0 {
+        return Err(Error::InsufficientFunds);
+    }
+
+    if dispute_deadline <= env.ledger().timestamp() {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    if storage::get_escrow(env, &escrow_id).is_some() {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        buyer,
+        seller,
+        amount,
+        currency,
+        status: EscrowStatus::Created,
+        release_condition,
+        dispute_deadline,
+        created_at: env.ledger().timestamp(),
+        funded_at: 0,
+        released_at: 0,
+        orchestration_id: None,
+    };
+
+    storage::set_escrow(env, &escrow_id, &escrow);
+
+    env.events().publish(
+        (Symbol::new(env, "EscrowCreated"), escrow_id.clone()),
+        (escrow_id.clone(), amount),
+    );
+
+    Ok(escrow)
+}
+
+pub fn release_escrow(
+    env: &Env,
+    escrow_id: String,
+    caller: Address,
+) -> Result<Escrow, Error> {
+    caller.require_auth();
+
+    let mut escrow = storage::get_escrow(env, &escrow_id)
+        .ok_or(Error::EscrowNotFound)?;
+
+    if caller != escrow.buyer {
+        return Err(Error::NotAuthorized);
+    }
+
+    if escrow.status != EscrowStatus::Created && escrow.status != EscrowStatus::Funded {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    escrow.status = EscrowStatus::Released;
+    escrow.released_at = env.ledger().timestamp();
+    storage::set_escrow(env, &escrow_id, &escrow);
+
+    env.events().publish(
+        (Symbol::new(env, "EscrowReleased"), escrow_id.clone()),
+        (escrow_id.clone(), escrow.amount),
+    );
+
+    Ok(escrow)
+}
+
+pub fn cancel_escrow(
+    env: &Env,
+    escrow_id: String,
+    caller: Address,
+) -> Result<Escrow, Error> {
+    caller.require_auth();
+
+    let mut escrow = storage::get_escrow(env, &escrow_id)
+        .ok_or(Error::EscrowNotFound)?;
+
+    if caller != escrow.buyer {
+        return Err(Error::NotAuthorized);
+    }
+
+    if escrow.status != EscrowStatus::Created && escrow.status != EscrowStatus::Funded {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    if env.ledger().timestamp() >= escrow.dispute_deadline {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    escrow.status = EscrowStatus::Cancelled;
+    storage::set_escrow(env, &escrow_id, &escrow);
+
+    env.events().publish(
+        (Symbol::new(env, "EscrowCancelled"), escrow_id.clone()),
+        escrow_id.clone(),
+    );
+
+    Ok(escrow)
+}
+
+pub fn dispute_escrow(
+    env: &Env,
+    escrow_id: String,
+    caller: Address,
+) -> Result<Escrow, Error> {
+    caller.require_auth();
+
+    let mut escrow = storage::get_escrow(env, &escrow_id)
+        .ok_or(Error::EscrowNotFound)?;
+
+    if caller != escrow.buyer && caller != escrow.seller {
+        return Err(Error::NotAuthorized);
+    }
+
+    if escrow.status == EscrowStatus::Released || escrow.status == EscrowStatus::Cancelled {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    if env.ledger().timestamp() > escrow.dispute_deadline {
+        return Err(Error::InvalidEscrowState);
+    }
+
+    escrow.status = EscrowStatus::Disputed;
+    storage::set_escrow(env, &escrow_id, &escrow);
+
+    env.events().publish(
+        (Symbol::new(env, "EscrowDisputed"), escrow_id.clone()),
+        escrow_id.clone(),
+    );
+
+    Ok(escrow)
+}
+
+pub fn get_escrow(env: &Env, escrow_id: String) -> Result<Escrow, Error> {
+    storage::get_escrow(env, &escrow_id).ok_or(Error::EscrowNotFound)
 }
 
 pub fn create_escrow_atomic(
@@ -25,9 +174,8 @@ pub fn create_escrow_atomic(
     }
 
     // Create checkpoint
-    let checkpoint_id = format!("{}_create", orchestration_id);
     let checkpoint = EscrowCheckpoint {
-        checkpoint_id: checkpoint_id.clone(),
+        checkpoint_id: orchestration_id.clone(),
         orchestration_id: orchestration_id.clone(),
         escrow_id: escrow_id.clone(),
         previous_status: EscrowStatus::Created,
@@ -56,8 +204,8 @@ pub fn create_escrow_atomic(
 
     // Emit event
     env.events().publish(
-        (symbol_short!("escrow_created_atomic"), escrow_id.clone()),
-        (escrow_id.clone(), amount)
+        (Symbol::new(env, "escrow_created_atomic"), escrow_id.clone()),
+        (escrow_id.clone(), amount),
     );
 
     Ok(escrow)
@@ -82,9 +230,8 @@ pub fn release_escrow_atomic(
     }
 
     // Create checkpoint before release
-    let checkpoint_id = format!("{}_release", orchestration_id);
     let checkpoint = EscrowCheckpoint {
-        checkpoint_id: checkpoint_id.clone(),
+        checkpoint_id: orchestration_id.clone(),
         orchestration_id: orchestration_id.clone(),
         escrow_id: escrow_id.clone(),
         previous_status: escrow.status.clone(),
@@ -100,8 +247,8 @@ pub fn release_escrow_atomic(
 
     // Emit event
     env.events().publish(
-        (symbol_short!("escrow_released_atomic"), escrow_id.clone()),
-        (escrow_id.clone(), escrow.amount)
+        (Symbol::new(env, "escrow_released_atomic"), escrow_id.clone()),
+        (escrow_id.clone(), escrow.amount),
     );
 
     Ok(escrow)
@@ -138,8 +285,8 @@ pub fn rollback_escrow(
 
     // Emit rollback event
     env.events().publish(
-        (symbol_short!("escrow_rolled_back"), escrow_id.clone()),
-        escrow_id.clone()
+        (Symbol::new(env, "escrow_rolled_back"), escrow_id.clone()),
+        escrow_id.clone(),
     );
 
     Ok(escrow)
